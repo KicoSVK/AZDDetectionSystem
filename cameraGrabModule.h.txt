@@ -1,0 +1,41 @@
+// Grab.cpp
+/*
+Note: Before getting started, Basler recommends reading the "Programmer's Guide" topic
+in the pylon C++ API documentation delivered with pylon.
+If you are upgrading to a higher major version of pylon, Basler also
+strongly recommends reading the "Migrating from Previous Versions" topic in the pylon C++ API documentation.
+
+This sample illustrates how to grab and process images using the CInstantCamera class.
+The images are grabbed and processed asynchronously, i.e.,
+while the application is processing a buffer, the acquisition of the next buffer is done
+in parallel.
+
+The CInstantCamera class uses a pool of buffers to retrieve image data
+from the camera device. Once a buffer is filled and ready,
+the buffer can be retrieved from the camera object for processing. The buffer
+and additional image data are collected in a grab result. The grab result is
+held by a smart pointer after retrieval. The buffer is automatically reused
+when explicitly released or when the smart pointer object is destroyed.
+*/
+
+// Include files to use the pylon API.
+#include <pylon/PylonIncludes.h>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/video/video.hpp>
+#include <opencv2/imgcodecs/imgcodecs.hpp>
+#include <ctime>
+#include "opencv2/cudaimgproc.hpp"
+#include "opencv2/cudawarping.hpp"
+#include <pylon/BaslerUniversalInstantCamera.h>
+
+#include "outputFrame.h"
+
+#ifndef MULTIPLATFORMSLEEP_H_
+#define MULTIPLATFORMSLEEP_H_
+#include "threadQueue.h"
+#endif
+
+void grabFrames(threadQueue<OutputFrame*>& queueFromCamera, int& fps);

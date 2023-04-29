@@ -9,6 +9,19 @@
 *.user
 *.userosscache
 *.sln.docstates
+*.vcxproj
+*.vcproj
+*.vcproj.*.user
+*.vcxproj.user
+*.vcxproj
+*.vcxproj.filters
+*vcxproj*
+*vcproj*
+*.pb
+*.weights
+*.cfg
+*.pbtxt
+*.names
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -338,3 +351,18 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+/yolov3.weights
+/yolov3.cfg
+/coco.names
+/MyVideo.avi
+/obj.names
+/yolov4.cfg
+/yolov4.weights
+*.mp4
+*.avi
+*.mp4v
+/krizikovaZALOHA.json
+/output.txt
+/outputOld.txt
+/log.txt
+/krizikova.json

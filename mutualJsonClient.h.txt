@@ -1,0 +1,55 @@
+/*
+ *  client.h
+ *  OpenSSL
+ *
+ *  Created by Thirumal Venkat on 18/05/16.
+ *  Copyright © 2016 Thirumal Venkat. All rights reserved.
+ */
+
+
+#ifndef MUTUALJSONCLIENT_H_
+#define MUTUALJSONCLIENT_H_
+
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "json.hpp"
+#include <iostream>
+#include <time.h>
+#include <random>
+#include <sstream>
+#include <iomanip>
+#include <string.h>
+#include <thread>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <regex>
+
+
+using namespace std;
+using namespace nlohmann;
+
+static SSL_CTX *get_client_context(const char *ca_pem, const char *cert_pem, const char *key_pem);
+unsigned int random_char();
+std::string generate_hex(const unsigned int len);
+
+extern std::string eventNames[];
+
+nlohmann::json getEventJsonTemplate();
+
+void uploadImage(std::string imageName, const char *ipAddress);
+
+void uploadVideo(std::string videoName, const char *ipAddress);
+
+void mutualJsonClientSend(const char *ipAddress, const char *port, const char *ca_pem, const char *cert_pem, const char *key_pem, json eventJson);
+void mutualJsonClientSendStatus(const char *ipAddress, const char *port, const char *ca_pem, const char *cert_pem, const char *key_pem, json statusJson);
+
+void send(const char *ipAddress, const char *port, const char *ca_pem, const char *cert_pem, const char *key_pem, json eventJson, bool statusMessage);
+
+
+inline bool fileExists(const std::string& name);
+
+
+#endif /* client_h */

@@ -1,0 +1,230 @@
+// Grab.cpp
+/*
+Note: Before getting started, Basler recommends reading the "Programmer's Guide" topic
+in the pylon C++ API documentation delivered with pylon.
+If you are upgrading to a higher major version of pylon, Basler also
+strongly recommends reading the "Migrating from Previous Versions" topic in the pylon C++ API documentation.
+
+This sample illustrates how to grab and process images using the CInstantCamera class.
+The images are grabbed and processed asynchronously, i.e.,
+while the application is processing a buffer, the acquisition of the next buffer is done
+in parallel.
+
+The CInstantCamera class uses a pool of buffers to retrieve image data
+from the camera device. Once a buffer is filled and ready,
+the buffer can be retrieved from the camera object for processing. The buffer
+and additional image data are collected in a grab result. The grab result is
+held by a smart pointer after retrieval. The buffer is automatically reused
+when explicitly released or when the smart pointer object is destroyed.
+*/
+
+// Include files to use the pylon API.
+#include "cameraGrabModule.h"
+
+// Namespace for using pylon objects.
+using namespace Pylon;
+using namespace cv;
+
+// Namespace for using cout.
+using namespace std;
+using namespace Basler_UniversalCameraParams;
+using namespace GenApi;
+
+
+extern Mat newFrame;
+extern bool stopGrabFrames;
+extern bool showCameraFPS;
+
+extern int inpWidth;
+extern int inpHeight;
+
+std::chrono::high_resolution_clock::time_point lastProcessedFrameTime;
+std::chrono::high_resolution_clock::time_point actualProcessedFrameTime;
+
+void grabFrames(threadQueue<OutputFrame*>& queueFromCamera, int& fps)
+{
+	InferenceTimer inferenceTimerCamera;
+	inferenceTimerCamera.timerInitialization();
+	OutputFrame* outputFrame = NULL;
+	
+	Mat frameOriginal;
+	Mat frameForDnn;
+	Mat frameForDisplay;
+
+	// static const uint32_t c_countOfImagesToGrab = 65535;
+
+	int record = false;
+	// bool verbose = true;
+	bool encode = true;
+	std::string pipeline;
+
+
+	// The exit code of the sample application.
+	int exitCode = 0;
+
+	// Before using any pylon methods, the pylon runtime must be initialized. 
+	PylonInitialize();
+
+	cv::Mat openCvImage;
+	CPylonImage pylonImage;
+
+	// Convert the grabbed buffer to pylon imag
+	CImageFormatConverter fc;
+
+	fc.OutputPixelFormat = PixelType_BGR8packed;
+
+	CPylonImage image;
+
+	unsigned int width = 1024; //2448
+	unsigned int height = 0.8366013071895425 * width; //2048 0.8366013071895425 * width
+
+	// unsigned int width = 2448; //2448
+	// unsigned int height = 2048; //2048 0.8366013071895425 * width
+
+	// Time: 0.067247
+	// SizeX: 2448
+	// SizeY: 2048
+	// Gray value of first pixel: 18
+
+	cuda::GpuMat frame_u;
+	cuda::GpuMat frame_d;
+	try
+	{
+		// Create an instant camera object with the camera device found first.
+		CBaslerUniversalInstantCamera camera(CTlFactory::GetInstance().CreateFirstDevice());
+
+		// Print the model name of the camera.
+		cout << "Using device " << camera.GetDeviceInfo().GetModelName() << endl;
+
+		// The parameter MaxNumBuffer can be used to control the count of buffers
+		// allocated for grabbing. The default value of this parameter is 10.
+		camera.MaxNumBuffer = 10;
+		camera.OutputQueueSize = 10;
+
+		// Start the grabbing of c_countOfImagesToGrab images.
+		// The camera device is parameterized with a default configuration which
+		// sets up free-running continuous acquisition.
+		// camera.StartGrabbing(c_countOfImagesToGrab);
+		camera.StartGrabbing();
+
+		// This smart pointer will receive the grab result data.
+		CGrabResultPtr ptrGrabResult;
+
+		//camera.TestImageSelector.TrySetValue(TestImageSelector_Off);
+		//camera.TestPattern.TrySetValue(TestPattern_Off);
+		camera.ExposureAuto.SetValue(ExposureAuto_Continuous);
+
+		camera.AcquisitionFrameRateEnable.SetValue(true);
+		camera.AcquisitionFrameRate.SetValue((double)fps);
+
+		camera.AutoFunctionROIUseWhiteBalance.SetValue(true);
+		// Enable Balance White Auto by setting the operating mode to Continuous
+		camera.BalanceWhiteAuto.SetValue(BalanceWhiteAuto_Once);
+
+		// Set the the Gain Auto auto function to its minimum lower limit
+		// and its maximum upper limit
+		double gainMinLowerLimit = camera.AutoGainLowerLimit.GetMin();
+		double gainMaxUpperLimit = camera.AutoGainUpperLimit.GetMax(); // 83ms
+		camera.AutoGainLowerLimit.SetValue(gainMinLowerLimit);
+		camera.AutoGainUpperLimit.SetValue(25);
+		// Specify the target value
+		//camera.AutoTargetBrightness.SetValue(0.6);
+		// Select auto function ROI 1
+		//camera.AutoFunctionROISelector.SetValue(AutoFunctionROISelector_ROI1);
+		// Enable the 'Brightness' auto function (Gain Auto + Exposure Auto)
+		// for the auto function ROI selected
+		camera.AutoFunctionROIUseBrightness.SetValue(true);
+		// Enable Gain Auto by setting the operating mode to Continuous
+		camera.GainAuto.SetValue(GainAuto_Continuous);
+
+
+		double exposureMinLowerLimit = camera.AutoExposureTimeLowerLimit.GetMin();
+		// double exposureMaxUpperLimit = camera.AutoExposureTimeUpperLimit.GetMax();
+		
+		camera.AutoExposureTimeLowerLimit.SetValue(exposureMinLowerLimit);
+		camera.AutoExposureTimeUpperLimit.SetValue(20000.0);
+		// Set the target brightness value to 0.6
+		camera.AutoTargetBrightness.SetValue(0.2);
+		// Select auto function ROI 1
+		//camera.AutoFunctionROISelector.SetValue(AutoFunctionROISelector_ROI1);
+		// Enable the 'Brightness' auto function (Gain Auto + Exposure Auto)
+		// for the auto function ROI selected
+		camera.AutoFunctionROIUseBrightness.SetValue(true);
+		// Enable Exposure Auto by setting the operating mode to Continuous
+		camera.ExposureAuto.SetValue(ExposureAuto_Continuous);
+
+		// Select auto function ROI 2
+		camera.AutoFunctionROISelector.SetValue(AutoFunctionROISelector_ROI1);
+		// Enable the Balance White Auto auto function
+		// for the auto function ROI selected
+		camera.AutoFunctionROIUseWhiteBalance.SetValue(true);
+		// Enable Balance White Auto by setting the operating mode to Continuous
+		camera.BalanceWhiteAuto.SetValue(BalanceWhiteAuto_Continuous);
+
+
+		// Camera.StopGrabbing() is called automatically by the RetrieveResult() method
+		// when c_countOfImagesToGrab images have been retrieved.		
+		
+		cout << "Starting grabbing frames!" << endl;
+		lastProcessedFrameTime = std::chrono::high_resolution_clock::now();
+		while (camera.IsGrabbing() && !stopGrabFrames)
+		{
+			
+			// Wait for an image and then retrieve it. A timeout of 5000 ms is used.
+			camera.RetrieveResult(5000, ptrGrabResult, TimeoutHandling_ThrowException);
+
+			// Image grabbed successfully?
+			if (ptrGrabResult->GrabSucceeded())
+			{
+				// Access the image data.
+				const uint8_t* pImageBuffer = (uint8_t*)ptrGrabResult->GetBuffer();
+				// if (verbose){
+				// 	cout << "SizeX: " << ptrGrabResult->GetWidth() << endl;
+				// 	cout << "SizeY: " << ptrGrabResult->GetHeight() << endl;                    
+				// 	cout << "Gray value of first pixel: " << (uint32_t)pImageBuffer[0] << endl << endl;
+				// }
+
+				fc.Convert(image, ptrGrabResult);
+				outputFrame = new OutputFrame;
+
+				outputFrame->frameOriginal = cv::Mat(ptrGrabResult->GetHeight(), ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t*)image.GetBuffer());
+				
+				frame_u.upload(outputFrame->frameOriginal);
+				cuda::resize(frame_u, frame_u, Size(width, height));
+				frame_u.download(outputFrame->frameOriginal);
+
+				frame_u.upload(outputFrame->frameOriginal);
+				cuda::resize(frame_u, frame_u, Size(inpWidth, inpHeight));
+				frame_u.download(outputFrame->frameForDnn);
+
+				outputFrame->frameOriginal.copyTo(outputFrame->frameForDisplay);				
+
+				queueFromCamera.push(outputFrame);
+				
+				if (showCameraFPS){				
+					
+					std::cout << "Average camera: " << inferenceTimerCamera.getInferenceAverageTimeInMilliseconds(true) << " ms FPS: " << inferenceTimerCamera.getAverageFps() << std::endl;
+				}
+			}
+			else
+			{
+				cout << "Error: " << ptrGrabResult->GetErrorCode() << " " << ptrGrabResult->GetErrorDescription() << endl;
+			}
+		}
+		camera.StopGrabbing();
+	}
+
+	catch (const GenericException& e)
+	{
+		// Error handling.
+		cerr << "An exception occurred." << endl
+			<< e.GetDescription() << endl;
+		exitCode = 1;
+	}
+
+	// Comment the following two lines to disable waiting on exit.
+	cerr << endl << "Camera grab ended." << endl;	
+
+	// Releases all pylon resources. 
+	PylonTerminate();	
+}
